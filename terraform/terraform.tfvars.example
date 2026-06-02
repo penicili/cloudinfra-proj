@@ -1,0 +1,15 @@
+# Salin file ini menjadi terraform.tfvars lalu sesuaikan nilainya.
+#   cp terraform.tfvars.example terraform.tfvars
+# Catatan: terraform.tfvars di-gitignore karena bisa berisi data sensitif.
+
+# Nama EC2 key pair yang sudah dibuat di AWS (wajib).
+key_name = "url-shortener-key"
+
+# Batasi akses SSH ke IP publik kamu saja. Cek IP: curl ifconfig.me
+# Contoh: "203.0.113.7/32". Default "0.0.0.0/0" (kurang aman).
+ssh_cidr = "0.0.0.0/0"
+
+# Opsional — sudah ada default di variables.tf
+# aws_region    = "ap-southeast-1"
+# instance_type = "t2.micro"
+# project_name  = "url-shortener"
