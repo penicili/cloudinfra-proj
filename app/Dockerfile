@@ -22,4 +22,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 5000
 
 # Jalankan via Waitress (WSGI server, lintas-platform); binding internal saja.
-CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "app:app"]
+CMD ["python", "app.py"]
