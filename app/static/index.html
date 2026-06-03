@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tautan// — URL shortener</title>
+<style>
+  /* ============================================================
+     tautan//  — infrastructure console aesthetic
+     phosphor amber on charcoal · monospace · system fonts only
+     ============================================================ */
+  :root {
+    --bg:        #f4f1e8;
+    --panel:     #fffdf7;
+    --panel-2:   #efe9da;
+    --line:      #d6cfbd;
+    --line-soft: #e6dfcd;
+    --ink:       #1d1f24;
+    --ink-dim:   #5b5f69;
+    --ink-faint: #9b9482;
+    --amber:     #d97c14;
+    --amber-deep:#a85e08;
+    --btn-ink:   #fffaf0;
+    --green:     #1f9e57;
+    --red:       #d23b3b;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono",
+            "Consolas", "DejaVu Sans Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    font-family: var(--mono);
+    background-color: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.5;
+    /* blueprint grid + warm wash */
+    background-image:
+      radial-gradient(120% 80% at 80% -10%, rgba(217,124,20,0.10), transparent 55%),
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 100% 100%, 32px 32px, 32px 32px;
+    background-position: 0 0, 0 0, 0 0;
+    padding: clamp(16px, 4vw, 48px);
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* faint paper texture overlay */
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, rgba(0,0,0,0.014) 0 1px, transparent 1px 3px);
+    z-index: 9999;
+  }
+
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  /* ---------- masthead ---------- */
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px; margin-bottom: 32px;
+  }
+  .brand { display: flex; flex-direction: column; gap: 4px; }
+  .brand h1 {
+    font-size: clamp(34px, 7vw, 58px);
+    font-weight: 700; letter-spacing: -0.04em; line-height: 0.92;
+    color: var(--ink);
+  }
+  .brand h1 .slash { color: var(--amber); }
+  .brand .cursor {
+    display: inline-block; width: 0.5em; height: 0.92em;
+    background: var(--amber); margin-left: 2px;
+    transform: translateY(0.12em);
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .brand p {
+    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .stat {
+    text-align: right; font-size: 11px; letter-spacing: 0.1em;
+    color: var(--ink-faint); text-transform: uppercase;
+  }
+  .stat .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ink-faint); margin-left: 6px;
+    box-shadow: 0 0 0 0 transparent;
+  }
+  .stat .dot.ok  { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .stat .dot.bad { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+
+  /* ---------- panel ---------- */
+  .panel {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 26px clamp(18px, 4vw, 34px) 30px;
+    margin-bottom: 22px;
+  }
+  /* corner brackets */
+  .panel::before, .panel::after {
+    content: ""; position: absolute; width: 12px; height: 12px;
+    border-color: var(--amber); border-style: solid;
+  }
+  .panel::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+  .panel::after  { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+
+  .panel-label {
+    position: absolute; top: -9px; left: 22px;
+    background: var(--panel); padding: 0 8px;
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--amber-deep);
+  }
+
+  .field-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  label.cap {
+    display: block; font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink-dim); margin-bottom: 8px;
+  }
+
+  input[type="text"] {
+    flex: 1 1 240px; min-width: 0;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: var(--mono); font-size: 15px;
+    padding: 14px 14px;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input[type="text"]::placeholder { color: var(--ink-faint); }
+  input[type="text"]:focus {
+    border-color: var(--amber);
+    box-shadow: inset 0 0 0 1px rgba(217,124,20,0.30), 0 4px 14px rgba(217,124,20,0.10);
+  }
+
+  button {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--btn-ink); background: var(--amber);
+    border: 1px solid var(--amber);
+    padding: 14px 22px; cursor: pointer;
+    transition: background .15s, transform .05s, box-shadow .15s;
+    white-space: nowrap;
+  }
+  button:hover { background: #ef9224; box-shadow: 0 6px 18px rgba(217,124,20,0.25); }
+  button:active { transform: translateY(1px); }
+  button.ghost {
+    background: transparent; color: var(--amber);
+    border-color: var(--line);
+  }
+  button.ghost:hover { border-color: var(--amber); background: rgba(217,124,20,0.08); box-shadow: none; }
+  button:disabled { opacity: .5; cursor: progress; }
+
+  /* ---------- result ---------- */
+  .result {
+    margin-top: 20px; border: 1px dashed var(--line);
+    background: var(--panel-2); padding: 16px 18px;
+    display: none;
+  }
+  .result.show { display: block; animation: slideIn .25s ease both; }
+  @keyframes slideIn { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+  .result .out-row {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .result a.short {
+    flex: 1 1 auto; min-width: 0;
+    font-size: clamp(16px, 3.4vw, 22px); color: var(--amber);
+    text-decoration: none; word-break: break-all;
+    border-bottom: 1px solid transparent;
+  }
+  .result a.short:hover { border-bottom-color: var(--amber); }
+  .result .orig {
+    margin-top: 8px; font-size: 12px; color: var(--ink-faint);
+    word-break: break-all;
+  }
+  .msg { margin-top: 12px; font-size: 12px; min-height: 1em; }
+  .msg.err { color: var(--red); }
+  .msg.ok  { color: var(--green); }
+
+  /* ---------- history ---------- */
+  .hist-head { display:flex; justify-content: space-between; align-items:center; margin-bottom: 6px; }
+  .hist-head .clear { font-size: 10px; letter-spacing:0.16em; color: var(--ink-faint); background:none; border:none; padding:4px; text-transform:uppercase; }
+  .hist-head .clear:hover { color: var(--red); box-shadow:none; background:none; }
+  ul.hist { list-style: none; }
+  ul.hist li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 4px; border-bottom: 1px solid var(--line-soft);
+    font-size: 13px;
+  }
+  ul.hist li:last-child { border-bottom: none; }
+  ul.hist .code { color: var(--amber); font-weight: 700; flex: 0 0 auto; }
+  ul.hist .u { color: var(--ink-dim); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul.hist .mini {
+    font-size: 10px; letter-spacing: .1em; color: var(--ink-faint);
+    background: none; border: 1px solid var(--line); padding: 5px 9px;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  ul.hist .mini:hover { border-color: var(--amber); color: var(--amber); box-shadow:none; background:none; }
+  .empty { color: var(--ink-faint); font-size: 12px; padding: 14px 4px; }
+
+  footer {
+    margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  footer .pipe { color: var(--line); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>tautan<span class="slash">//</span><span class="cursor"></span></h1>
+      <p>URL shortener · Flask + Redis</p>
+    </div>
+    <div class="stat" id="stat">
+      service status<span class="dot" id="statDot"></span>
+    </div>
+  </header>
+
+  <!-- ============ SHORTEN ============ -->
+  <section class="panel">
+    <span class="panel-label">01 · shorten</span>
+    <label class="cap" for="urlIn">long url</label>
+    <div class="field-row">
+      <input type="text" id="urlIn" placeholder="https://contoh.com/link/panjang/mencurigakan/..." autocomplete="off" spellcheck="false">
+      <button id="shortenBtn">Shorten ▸</button>
+    </div>
+
+    <div class="result" id="result">
+      <div class="out-row">
+        <a class="short" id="shortLink" href="#" target="_blank" rel="noopener"></a>
+        <button class="ghost" id="copyBtn">Copy</button>
+      </div>
+      <div class="orig" id="origUrl"></div>
+    </div>
+    <div class="msg" id="shortMsg"></div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section class="panel">
+    <span class="panel-label">02 · log</span>
+    <div class="hist-head">
+      <label class="cap" style="margin:0">local history</label>
+      <button class="clear" id="clearBtn">clear</button>
+    </div>
+    <ul class="hist" id="histList"></ul>
+  </section>
+
+  <footer>
+    <span>tautan// · tugas besar uas infrastruktur awan</span>
+    <span><span class="pipe">[</span> telkom university <span class="pipe">]</span></span>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+
+const HIST_KEY = "tautan_history";
+const $ = (id) => document.getElementById(id);
+
+/* ---------- helpers ---------- */
+function setMsg(el, text, kind) {
+  el.className = "msg" + (kind ? " " + kind : "");
+  el.textContent = text || "";
+}
+
+async function copyText(text) {
+  // Cara utama: Clipboard API (hanya tersedia di secure context: https / localhost).
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) { /* lanjut ke fallback di bawah */ }
+  }
+  // Fallback: textarea + execCommand("copy") — jalan di http biasa juga.
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "0";
+    ta.style.left = "0";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* ---------- history (localStorage) ---------- */
+function loadHist() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; }
+  catch (e) { return []; }
+}
+function saveHist(list) {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 30))); }
+  catch (e) {}
+}
+function addHist(entry) {
+  const list = loadHist().filter(x => x.code !== entry.code);
+  list.unshift(entry);
+  saveHist(list);
+  renderHist();
+}
+function renderHist() {
+  const list = loadHist();
+  const ul = $("histList");
+  ul.innerHTML = "";
+  if (!list.length) {
+    ul.innerHTML = '<li class="empty">// belum ada tautan dibuat di browser ini</li>';
+    return;
+  }
+  for (const item of list) {
+    const li = document.createElement("li");
+
+    const code = document.createElement("span");
+    code.className = "code"; code.textContent = item.code;
+
+    const u = document.createElement("span");
+    u.className = "u"; u.textContent = item.url; u.title = item.url;
+
+    const copy = document.createElement("button");
+    copy.className = "mini"; copy.textContent = "copy";
+    copy.onclick = async () => {
+      const ok = await copyText(item.short_url);
+      copy.textContent = ok ? "ok!" : "err";
+      setTimeout(() => copy.textContent = "copy", 1200);
+    };
+
+    const open = document.createElement("button");
+    open.className = "mini"; open.textContent = "open";
+    open.onclick = () => window.open(item.short_url, "_blank", "noopener");
+
+    li.append(code, u, copy, open);
+    ul.appendChild(li);
+  }
+}
+
+/* ---------- shorten ---------- */
+async function doShorten() {
+  const url = $("urlIn").value.trim();
+  const btn = $("shortenBtn");
+  setMsg($("shortMsg"), "");
+  if (!url) { setMsg($("shortMsg"), "masukkan URL terlebih dahulu.", "err"); return; }
+
+  btn.disabled = true; btn.textContent = "···";
+  try {
+    const res = await fetch("/shorten", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMsg($("shortMsg"), data.error || ("gagal (HTTP " + res.status + ")"), "err");
+      return;
+    }
+    $("shortLink").textContent = data.short_url;
+    $("shortLink").href = data.short_url;
+    $("origUrl").textContent = "↳ " + data.url;
+    $("result").classList.add("show");
+    setMsg($("shortMsg"), "kode dibuat: " + data.code, "ok");
+    addHist({ code: data.code, short_url: data.short_url, url: data.url });
+  } catch (e) {
+    setMsg($("shortMsg"), "tidak bisa menghubungi server.", "err");
+  } finally {
+    btn.disabled = false; btn.textContent = "Shorten ▸";
+  }
+}
+
+/* ---------- service status (/health) ---------- */
+async function pingStatus() {
+  const dot = $("statDot");
+  try {
+    const res = await fetch("/health", { cache: "no-store" });
+    const data = await res.json();
+    if (res.ok && data.redis === "connected") {
+      dot.className = "dot ok"; $("stat").firstChild.textContent = "redis online ";
+    } else {
+      dot.className = "dot bad"; $("stat").firstChild.textContent = "redis down ";
+    }
+  } catch (e) {
+    dot.className = "dot bad"; $("stat").firstChild.textContent = "offline ";
+  }
+}
+
+/* ---------- copy main result ---------- */
+$("copyBtn").onclick = async () => {
+  const ok = await copyText($("shortLink").textContent);
+  $("copyBtn").textContent = ok ? "Copied!" : "Failed";
+  setTimeout(() => $("copyBtn").textContent = "Copy", 1400);
+};
+
+/* ---------- wire up ---------- */
+$("shortenBtn").onclick = doShorten;
+$("urlIn").addEventListener("keydown", e => { if (e.key === "Enter") doShorten(); });
+$("clearBtn").onclick = () => { localStorage.removeItem(HIST_KEY); renderHist(); };
+
+renderHist();
+pingStatus();
+setInterval(pingStatus, 15000);
+</script>
+</body>
+</html>

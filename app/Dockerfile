@@ -13,12 +13,13 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Salin kode aplikasi.
+# Salin kode aplikasi + aset UI.
 COPY app.py ./
+COPY static ./static
 
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 5000
 
-# Jalankan via Gunicorn; binding internal saja (tidak di-expose ke host).
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "app:app"]
+# Jalankan via Waitress (WSGI server, lintas-platform); binding internal saja.
+CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "app:app"]

@@ -9,10 +9,17 @@ import os
 import secrets
 import string
 
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, jsonify, redirect, request, send_from_directory
 import redis
+import waitress
+import logging
+import dotenv
+
+
+logging.basicConfig(level=logging.INFO)
 
 # --- Konfigurasi ----------------------------------------------------------
+dotenv.load_dotenv()
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 
@@ -42,7 +49,13 @@ def generate_code() -> str:
 
 @app.route("/", methods=["GET"])
 def index():
-    """Health check + ringkasan endpoint."""
+    """Sajikan antarmuka web (single-page)."""
+    return send_from_directory(app.static_folder, "index.html")
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    """Health check JSON + status koneksi Redis (dipakai badge status di UI)."""
     try:
         db.ping()
         redis_status = "connected"
@@ -106,5 +119,14 @@ def info(code: str):
 
 
 if __name__ == "__main__":
+    # print(REDIS_HOST, REDIS_PORT)
+    # exit(0)
+    # Cek ke redis
+    try:
+        db.ping()
+        logging.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
+    except redis.RedisError as e:
+        logging.error(f"Failed to connect to Redis at {REDIS_HOST}:{REDIS_PORT}: {e}")
+        exit(1)
     # Hanya untuk development lokal; di container dijalankan via Gunicorn.
-    app.run(host="0.0.0.0", port=5000)
+    waitress.serve(app, host="0.0.0.0", port=5000)
