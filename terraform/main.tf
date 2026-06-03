@@ -110,6 +110,12 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+# File deploy dibaca dari repo (sumber tunggal) lalu ditanam ke instance.
+locals {
+  compose_file = file("${path.module}/../docker-compose.yml")
+  nginx_conf   = file("${path.module}/../nginx/nginx.conf")
+}
+
 # --- EC2 instance ---------------------------------------------------------
 resource "aws_instance" "app" {
   ami                    = data.aws_ami.amazon_linux_2.id
@@ -118,9 +124,14 @@ resource "aws_instance" "app" {
   vpc_security_group_ids = [aws_security_group.web.id]
   key_name               = var.key_name
 
+  # Trigger replace instance bila isi compose/nginx berubah (agar redeploy).
+  user_data_replace_on_change = true
+
   user_data = <<-EOF
     #!/bin/bash
     set -e
+    exec > /var/log/user-data.log 2>&1   # log untuk debug: cat /var/log/user-data.log
+
     yum update -y
     amazon-linux-extras install docker -y
     systemctl enable docker
@@ -133,9 +144,18 @@ resource "aws_instance" "app" {
       -o /usr/local/lib/docker/cli-plugins/docker-compose
     chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-    # Catatan: salin source (app/, nginx/, docker-compose.yml) ke instance
-    # via 'scp' atau 'git clone', lalu jalankan 'docker compose up -d'.
-    # Lihat README untuk langkah deploy.
+    # Tunggu daemon docker siap
+    until docker info >/dev/null 2>&1; do sleep 2; done
+
+    # Tanam file deploy (di-decode dari base64; sumber tunggal = repo lokal)
+    mkdir -p /opt/app/nginx
+    echo '${base64encode(local.compose_file)}' | base64 -d > /opt/app/docker-compose.yml
+    echo '${base64encode(local.nginx_conf)}'   | base64 -d > /opt/app/nginx/nginx.conf
+
+    # Tarik image (app dari Docker Hub, redis & nginx official) lalu jalankan
+    cd /opt/app
+    docker compose pull
+    docker compose up -d
   EOF
 
   tags = {

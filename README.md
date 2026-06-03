@@ -79,29 +79,43 @@ curl -L http://localhost/Ab3xZ9
 curl http://localhost/info/Ab3xZ9
 ```
 
-## Deploy ke AWS (Terraform)
+## Deploy ke AWS (Terraform) — otomatis, tanpa SSH
 
-Prasyarat: AWS CLI terkonfigurasi dengan **IAM user least-privilege** (bukan root),
-serta EC2 key pair yang sudah dibuat di region tujuan.
+Alurnya: image `app` di-build di laptop & di-push ke Docker Hub; `terraform apply`
+membuat EC2 yang **otomatis** menarik image + menjalankan stack via `user_data`
+(tidak perlu `scp`/`ssh` manual).
+
+Prasyarat: kredensial AWS (IAM user, bukan root) & EC2 key pair (untuk SSH darurat saja).
+
+### 1. Build & push image app (di laptop)
+
+```bash
+docker login                                   # akun Docker Hub
+docker build -t penicili/tubes-infra:v1 ./app  # samakan dengan image: di docker-compose.yml
+docker push penicili/tubes-infra:v1
+```
+
+### 2. Provision + auto-deploy
 
 ```bash
 cd terraform
 terraform init
-terraform apply -var="key_name=NAMA_KEYPAIR" -var="ssh_cidr=$(curl -s ifconfig.me)/32"
-# catat output public_ip
+terraform apply        # pakai terraform.tfvars; ketik yes
+# tunggu ~2-3 menit (user_data: install docker -> pull image -> up -d)
+# buka http://<public_ip> dari output
 ```
 
-Salin source ke instance lalu jalankan stack:
+`user_data` membaca `docker-compose.yml` + `nginx/nginx.conf` dari repo (via
+Terraform `file()`), menanamnya ke `/opt/app` di instance, lalu menjalankan
+`docker compose pull && up -d`. Log proses: `sudo cat /var/log/user-data.log`.
 
-```bash
-scp -i KEY.pem -r ../app ../nginx ../docker-compose.yml ec2-user@<public_ip>:~/
-ssh -i KEY.pem ec2-user@<public_ip>
-docker compose up -d
-```
+> Update image (mis. push `:v2` & ubah tag di `docker-compose.yml`): `terraform apply`
+> akan **mengganti instance** otomatis (`user_data_replace_on_change = true`) sehingga
+> redeploy tanpa SSH. Untuk update cepat tanpa replace, boleh SSH lalu `docker compose pull && up -d`.
 
 > ⚠️ **Wajib `terraform destroy` setelah demo selesai** (free tier safety).
 > ```bash
-> terraform destroy -var="key_name=NAMA_KEYPAIR"
+> terraform destroy
 > ```
 
 ## Skenario uji (Bab V)
