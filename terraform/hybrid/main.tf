@@ -112,8 +112,8 @@ data "aws_ami" "amazon_linux_2" {
 
 # File deploy dibaca dari repo (sumber tunggal) lalu ditanam ke instance.
 locals {
-  compose_file = file("${path.module}/../docker-compose.yml")
-  nginx_conf   = file("${path.module}/../nginx/nginx.conf")
+  compose_file = file("${path.module}/../../docker-compose.yml")
+  nginx_conf   = file("${path.module}/../../nginx/nginx.conf")
 }
 
 # --- EC2 instance ---------------------------------------------------------

@@ -79,7 +79,19 @@ curl -L http://localhost/Ab3xZ9
 curl http://localhost/info/Ab3xZ9
 ```
 
-## Deploy ke AWS (Terraform) — otomatis, tanpa SSH
+## Dua arsitektur Terraform (perbandingan akademis)
+
+Repo menyediakan dua konfigurasi Terraform dengan topologi service yang **sama**
+(nginx → flask → redis), untuk membuktikan kontainer komplementer terhadap VM:
+
+| Folder | Arsitektur | Isolasi |
+|--------|-----------|---------|
+| `terraform/hybrid/` | **3 kontainer di 1 VM** (Docker Compose di atas EC2) | level kontainer + VM |
+| `terraform/vm-only/` | **3 VM terpisah** (nginx, flask, redis masing-masing 1 EC2) | level VM + Security Group |
+
+Keduanya pakai key pair AWS yang sama (`key_name` di `terraform.tfvars`).
+
+## Deploy HYBRID — otomatis, tanpa SSH
 
 Alurnya: image `app` di-build di laptop & di-push ke Docker Hub; `terraform apply`
 membuat EC2 yang **otomatis** menarik image + menjalankan stack via `user_data`
@@ -98,7 +110,8 @@ docker push penicili/tubes-infra:v1
 ### 2. Provision + auto-deploy
 
 ```bash
-cd terraform
+cd terraform/hybrid
+cp terraform.tfvars.example terraform.tfvars   # isi key_name & ssh_cidr (sekali saja)
 terraform init
 terraform apply        # pakai terraform.tfvars; ketik yes
 # tunggu ~2-3 menit (user_data: install docker -> pull image -> up -d)
@@ -117,6 +130,26 @@ Terraform `file()`), menanamnya ke `/opt/app` di instance, lalu menjalankan
 > ```bash
 > terraform destroy
 > ```
+
+## Deploy VM-ONLY — 3 VM terpisah (pembanding)
+
+Tiga EC2 (Amazon Linux 2023) masing-masing menjalankan satu service via `user_data`.
+nginx (publik :80) → flask (:5000, hanya dari SG nginx) → redis (:6379, hanya dari SG app).
+Tidak perlu Docker Hub — tiap VM meng-install service-nya langsung (`dnf`/`pip`).
+
+```bash
+cd terraform/vm-only
+cp terraform.tfvars.example terraform.tfvars   # isi key_name (sama dgn hybrid) & ssh_cidr
+terraform init
+terraform apply        # ~13 resource (VPC, IGW, subnet, RT, assoc, 3 SG, 3 EC2)
+# buka http://<nginx_public_ip> dari output -> tampil "hello from vm"
+```
+
+Outputs: `nginx_public_ip`, `app_private_ip`, `redis_private_ip`. SSH ke nginx:
+`ssh -i ~/url-shortener-key.pem ec2-user@<nginx_public_ip>`. Log tiap VM:
+`sudo cat /var/log/user-data.log`.
+
+> ⚠️ Sama seperti hybrid — **wajib `terraform destroy`** di `terraform/vm-only/` setelah selesai.
 
 ## Skenario uji (Bab V)
 
